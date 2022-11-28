@@ -8,10 +8,6 @@ python3 -m nltk.downloader wordnet
 python3 -m nltk.downloader stopwords
 
 
-<<<<<<< HEAD
 =======
 # Data Cleaning
 
-
-
->>>>>>> 8bbb878 (update)
