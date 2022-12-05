@@ -13,11 +13,11 @@ def clean_data(df):
 
     # remove urls
     for i in range(len(df)):
-        stringliteral = df['selftext'][i]
-        df['selftext'][i] = re.sub(url_filter, '', stringliteral)
+        stringliteral = df['body'][i]
+        df['body'][i] = re.sub(url_filter, '', stringliteral)
 
     # only select those that have letters
-    df = df[df["selftext"].str.contains(r'[a-zA-Z]')].reset_index(drop = False)
+    df = df[df["body"].str.contains(r'[a-zA-Z]')].reset_index(drop = False)
 
     return df
 
@@ -27,21 +27,21 @@ def load_and_format(path):
     conn = sqlite3.connect(path)
 
     # load a data sample
-    query = "SELECT * FROM submissions WHERE is_self = 1 AND selftext is NOT '' AND selftext is NOT NULL ORDER BY RANDOM() LIMIT 100;"
+    query = "SELECT * FROM comments WHERE body is NOT '' AND body is NOT NULL"
 
     reddit_df = pd.read_sql_query(query, conn)
-    reddit_df = reddit_df[reddit_df['selftext'].notna()].reset_index(drop=False)
+    reddit_df = reddit_df[reddit_df['body'].notna()].reset_index(drop=False)
 
     # check if Toxicity is part of the schema
     if "Toxicity" in reddit_df.columns:
         pass
     else:
         # if not, add all the relevant values
-        conn.execute("ALTER TABLE submissions ADD Toxicity real;")
-        conn.execute("ALTER TABLE submissions ADD Insult real;")
-        conn.execute("ALTER TABLE submissions ADD Severe_Toxicity real;")
-        conn.execute("ALTER TABLE submissions ADD Identity_Attack real;")
-        conn.execute("ALTER TABLE submissions ADD Profanity real;")
+        conn.execute("ALTER TABLE comments ADD Toxicity real;")
+        conn.execute("ALTER TABLE comments ADD Insult real;")
+        conn.execute("ALTER TABLE comments ADD Severe_Toxicity real;")
+        conn.execute("ALTER TABLE comments ADD Identity_Attack real;")
+        conn.execute("ALTER TABLE comments ADD Profanity real;")
 
         conn.commit()
     
@@ -53,7 +53,7 @@ def parse_googlePerspective(path, client, sample):
 
     #print(sample)
 
-    sample_text = sample['selftext']
+    sample_text = sample['body']
 
     # check if the submissions text is within limit for the API
 
@@ -93,7 +93,7 @@ def parse_googlePerspective(path, client, sample):
             cols = ['Toxicity', 'Insult', 'Severe_Toxicity', 'Identity_Attack', 'Profanity']
 
             for col in cols:
-                query = f''' UPDATE submissions SET {col} = {sample[col]} WHERE id= '{sample['id']}' '''
+                query = f''' UPDATE comments SET {col} = {sample[col]} WHERE id= '{sample['id']}' '''
                 conn.execute(query)
                 conn.commit()
 
@@ -129,7 +129,7 @@ def parse_googlePerspective(path, client, sample):
             cols = ['Toxicity', 'Insult', 'Severe_Toxicity', 'Identity_Attack', 'Profanity']
 
             for col in cols:
-                query = f''' UPDATE submissions SET {col} = {sample[col]} WHERE id= '{sample['id']}' '''
+                query = f''' UPDATE comments SET {col} = {sample[col]} WHERE id= '{sample['id']}' '''
                 conn.execute(query)
                 conn.commit()
 
@@ -138,12 +138,10 @@ def parse_googlePerspective(path, client, sample):
 
             error_df = pd.DataFrame([{'id': sample['id']}])
             error_df.to_sql('errors_perspective', conn, if_exists='append')
-
 def main():
-    
     # load and format the data
 
-    path = 'reddit_data.db'
+    path = './reddit_data_comments.db'
     conn = load_and_format(path)
 
     # parameters for Google Perspective
@@ -155,16 +153,17 @@ def main():
     discoveryServiceUrl="https://commentanalyzer.googleapis.com/$discovery/rest?version=v1alpha1",
     static_discovery=False,
     )
+    query = "SELECT * FROM comments WHERE body is NOT '' AND body is not NULL AND Toxicity is NULL;"
+    reddit_df = pd.read_sql_query(query, conn)
 
-
+    print(reddit_df[0:10])
     # run multiple times
-    for _ in range(1000):
+    for _ in range(10):
         # select batches where Toxicity is not available and Self Text is
-        query = "SELECT * FROM submissions WHERE is_self = 1 AND selftext is NOT '' AND selftext is not NULL AND Toxicity is NULL ORDER BY RANDOM() LIMIT 25;"
-        reddit_df = pd.read_sql_query(query, conn)
 
+        
         # clean it
-        reddit_clean = clean_data(reddit_df)
+        reddit_clean = clean_data(reddit_df[0:10])
 
         # send batch requests by multiprocessing
         with Pool(processes=cpu_count()) as pl:
